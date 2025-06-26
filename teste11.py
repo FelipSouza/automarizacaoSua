@@ -11,7 +11,10 @@ from selenium.webdriver.support import expected_conditions as EC
 import tempfile
 import shutil
 import os
+import re
 
+# Iniciar log
+log = open("log_chamados.txt", "a")
 
 # Caminho para a planilha
 arquivo_planilha = "/home/felipe/Documents/projetoChmadosSua/automarizacaoSua/chamados.xlsx"
@@ -40,38 +43,43 @@ time.sleep(2)
 
 # Loop pelos chamados
 for index, row in df.iterrows():
-    navegador.get("https://sua.riobranco.ac.gov.br/front/ticket.form.php")
-    time.sleep(3)
-
     titulo = row['TITULO']
     descricao = row['DESCRICAO']
+    descricao = re.sub(r"(?<!^)\s*(Problema:|Unidade:|Patrimônio:|Modelo:|Local:)", r"\n\1", descricao.strip())
     hora = row['HORA']
     categoria = row['CATEGORIA']
     atribuido = row['ATRIBUIDO']
     localizacao = row['LOCALIZACAO']
     unidade = row['UNIDADE']
-    hora_formatada = pd.to_datetime(hora).strftime("%d-%m-%Y %H:%M:%S")
 
-    # Título
-    navegador.find_element(
-        By.XPATH, '//*[@id="mainformtable4"]/tbody/tr[1]/td/input'
-    ).send_keys(titulo + ' - ' + unidade)
-    time.sleep(2)
+    # Verificar se campos obrigatórios estão preenchidos
+    if pd.isna(titulo) or pd.isna(descricao) or pd.isna(hora) or pd.isna(categoria) or pd.isna(atribuido):
+        log.write(f"[{index}] Linha ignorada: campos obrigatórios vazios.\n")
+        continue
 
-    # Descrição (TinyMCE)
-    iframe = WebDriverWait(navegador, 10).until(
-        EC.presence_of_element_located((By.XPATH, '//iframe[contains(@id,"ifr")]'))
-    )
-    navegador.switch_to.frame(iframe)
-    editor = WebDriverWait(navegador, 10).until(
-        EC.presence_of_element_located((By.ID, 'tinymce'))
-    )
-    editor.clear()
-    editor.send_keys(descricao)
-    navegador.switch_to.default_content()
-
-    # Categoria (Select2)
     try:
+        hora_formatada = pd.to_datetime(hora).strftime("%d-%m-%Y %H:%M:%S")
+
+        navegador.get("https://sua.riobranco.ac.gov.br/front/ticket.form.php")
+        time.sleep(3)
+
+        navegador.find_element(
+            By.XPATH, '//*[@id="mainformtable4"]/tbody/tr[1]/td/input'
+        ).send_keys(titulo + ' - ' + unidade)
+        time.sleep(2)
+
+        iframe = WebDriverWait(navegador, 10).until(
+            EC.presence_of_element_located((By.XPATH, '//iframe[contains(@id,"ifr")]'))
+        )
+        navegador.switch_to.frame(iframe)
+        editor = WebDriverWait(navegador, 10).until(
+            EC.presence_of_element_located((By.ID, 'tinymce'))
+        )
+        editor.clear()
+        editor.send_keys(descricao)
+        navegador.switch_to.default_content()
+
+        # Categoria
         cat = WebDriverWait(navegador, 10).until(
             EC.element_to_be_clickable(
                 (By.XPATH, '//span[contains(@id,"select2-dropdown_itilcategories_id") '
@@ -85,12 +93,8 @@ for index, row in df.iterrows():
         inp.send_keys(categoria)
         time.sleep(1)
         inp.send_keys(Keys.RETURN)
-        print(f"[{index}] Categoria: {categoria}")
-    except Exception as e:
-        print(f"[{index}] Erro Categoria:", e)
 
-    # Atribuído (Select2)
-    try:
+        # Atribuído
         att = WebDriverWait(navegador, 10).until(
             EC.element_to_be_clickable(
                 (By.XPATH, '//span[contains(@id,"select2-dropdown__users_id_assign") '
@@ -104,12 +108,8 @@ for index, row in df.iterrows():
         inp.send_keys(atribuido)
         time.sleep(1)
         inp.send_keys(Keys.RETURN)
-        print(f"[{index}] Atribuído: {atribuido}")
-    except Exception as e:
-        print(f"[{index}] Erro Atribuído:", e)
 
-    # Localização (Select2)
-    try:
+        # Localização
         loc = WebDriverWait(navegador, 10).until(
             EC.element_to_be_clickable(
                 (By.XPATH, '//span[contains(@id,"select2-dropdown_locations_id") '
@@ -123,47 +123,47 @@ for index, row in df.iterrows():
         inp.send_keys(localizacao)
         time.sleep(1)
         inp.send_keys(Keys.RETURN)
-        print(f"[{index}] Localização: {localizacao}")
-    except Exception as e:
-        print(f"[{index}] Erro Localização:", e)
 
-    # Data/Hora (flatpickr)
-    cal = WebDriverWait(navegador, 10).until(
-        EC.element_to_be_clickable((By.XPATH, '//a[@class="input-button"]'))
-    )
-    cal.click()
-
-    campo = WebDriverWait(navegador, 10).until(
-        EC.visibility_of_element_located(
-            (By.XPATH, '//input[@class="no-wrap flatpickr form-control input active"]')
+        # Data/Hora
+        cal = WebDriverWait(navegador, 10).until(
+            EC.element_to_be_clickable((By.XPATH, '//a[@class="input-button"]'))
         )
-    )
-    campo.clear()
-    campo.send_keys(hora_formatada)
-    campo.send_keys(Keys.RETURN)
+        cal.click()
 
-    try:
-        WebDriverWait(navegador, 10).until(
-            EC.invisibility_of_element_located(
-                (By.XPATH, '//div[contains(@class,"flatpickr-calendar")]')
+        campo = WebDriverWait(navegador, 10).until(
+            EC.visibility_of_element_located(
+                (By.XPATH, '//input[@class="no-wrap flatpickr form-control input active"]')
             )
         )
-    except:
-        navegador.find_element(By.XPATH, '//body').click()
+        campo.clear()
+        campo.send_keys(hora_formatada)
+        campo.send_keys(Keys.RETURN)
 
+        try:
+            WebDriverWait(navegador, 3).until(
+                EC.invisibility_of_element_located(
+                    (By.XPATH, '//div[contains(@class,"flatpickr-calendar")]')
+                )
+            )
+        except:
+            navegador.find_element(By.XPATH, '//body').click()
 
-    #clicar em enviar após preencher dados do chamado
-    botao_enviar = WebDriverWait(navegador, 5).until(
-    EC.element_to_be_clickable((By.XPATH, '//*[@id="tabsbody"]/div[2]/button'))
-    )
-    botao_enviar.click()
-    
-    print(f"[{index}] Chamado enviado com sucesso.")
+        # Enviar chamado
+        botao_enviar = WebDriverWait(navegador, 5).until(
+            EC.element_to_be_clickable((By.XPATH, '//*[@id="tabsbody"]/div[2]/button'))
+        )
+        botao_enviar.click()
 
-    # Aguarda um pouco antes de ir para o próximo
-    time.sleep(1)
+        log.write(f"[{index}] Chamado enviado com sucesso.\n")
+        print(f"[{index}] Chamado enviado com sucesso.")
 
+        time.sleep(1)
+
+    except Exception as e:
+        log.write(f"[{index}] Erro no chamado: {e}\n")
+        print(f"[{index}] Erro no chamado:", e)
 
 # Finalização
+log.close()
 input("Pressione Enter para sair...")
 navegador.quit()
