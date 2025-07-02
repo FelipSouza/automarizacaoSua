@@ -41,23 +41,44 @@ class App:
         self.senha_var = tk.StringVar(value="felypekratos2")
         self.arquivo_path = tk.StringVar()
         self.navegador_var = tk.StringVar(value="Edge")
+        self.senha_visivel = False
 
+        # Campo Login
         tk.Label(root, text="Login SUA:").pack(pady=(10, 0))
         tk.Entry(root, textvariable=self.login_var, width=40).pack()
 
+        # Campo Senha + Botão Mostrar/Ocultar
         tk.Label(root, text="Senha SUA:").pack(pady=(10, 0))
-        tk.Entry(root, textvariable=self.senha_var, width=40, show="*").pack()
+        senha_frame = tk.Frame(root)
+        senha_frame.pack()
 
+        self.senha_entry = tk.Entry(senha_frame, textvariable=self.senha_var, width=36, show="*")
+        self.senha_entry.pack(side=tk.LEFT)
+
+        try:
+            olho_path = os.path.join(os.path.dirname(__file__), "olho.png")
+            olho_img = Image.open(olho_path)
+            olho_img = olho_img.resize((20, 20))
+            self.olho_icon = ImageTk.PhotoImage(olho_img)
+            self.toggle_btn = tk.Button(senha_frame, image=self.olho_icon, command=self.toggle_senha, relief=tk.FLAT)
+            self.toggle_btn.pack(side=tk.LEFT, padx=5)
+        except Exception as e:
+            print(f"Erro ao carregar olho.png: {e}")
+
+        # Excel
         tk.Label(root, text="Arquivo Excel de chamados:").pack(pady=(10, 0))
         tk.Entry(root, textvariable=self.arquivo_path, width=80).pack(padx=10)
         tk.Button(root, text="Selecionar arquivo", command=self.selecionar_arquivo).pack(pady=5)
 
+        # Navegador
         tk.Label(root, text="Escolha o navegador:").pack(pady=(10, 0))
         tk.OptionMenu(root, self.navegador_var, "Edge", "Chrome").pack()
 
+        # Botão Iniciar
         self.btn_iniciar = tk.Button(root, text="Iniciar Abertura de Chamados", command=self.iniciar_processamento)
         self.btn_iniciar.pack(pady=10)
 
+        # Progresso e Log
         tk.Label(root, text="Progresso:").pack()
         self.progress = ttk.Progressbar(root, length=600, mode='determinate')
         self.progress.pack(pady=5)
@@ -66,8 +87,12 @@ class App:
         self.log_text = scrolledtext.ScrolledText(root, height=15, width=85, state='disabled')
         self.log_text.pack(padx=10, pady=5)
 
-        # Informações de versão e desenvolvedor
+        # Versão e Desenvolvedor
         tk.Label(root, text="Versão 1.0 | Desenvolvedor: Felipe Souza - DETI 2025", font=("Arial", 9, "italic")).pack(pady=(10, 5))
+
+    def toggle_senha(self):
+        self.senha_visivel = not self.senha_visivel
+        self.senha_entry.config(show="" if self.senha_visivel else "*")
 
     def log(self, msg):
         self.log_text.config(state='normal')
@@ -103,7 +128,6 @@ class App:
         user_data_dir = None
         try:
             navegador_escolhido = self.navegador_var.get()
-
             user_data_dir = tempfile.mkdtemp(prefix="selenium_profile_")
 
             if navegador_escolhido == "Edge":
